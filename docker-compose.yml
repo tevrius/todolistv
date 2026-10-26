@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: todo
+      POSTGRES_PASSWORD: todo
+      POSTGRES_DB: todo
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U todo -d todo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Раскомментируйте, чтобы подключаться к БД с хоста:
+    # ports:
+    #   - "5432:5432"
+
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://todo:todo@db:5432/todo
+    ports:
+      # 8000 внутри контейнера; на хосте 8001, чтобы не конфликтовать
+      # с уже занятым портом (поменяйте при необходимости)
+      - "8001:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    # Перед стартом применяем миграции
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - app
+
+volumes:
+  pgdata:
